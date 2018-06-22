@@ -769,6 +769,77 @@ func BenchmarkOrderBy(b *testing.B) {
 	})
 }
 
+// runBenchmarkOrderBy benchmarks scanning a table and sorting the results.
+func runBenchmarkWindow(b *testing.B, db *gosql.DB, count int, partitions int, windowFn string, rows int) {
+	defer func() {
+		if _, err := db.Exec(`DROP TABLE IF EXISTS bench.window`); err != nil {
+			b.Fatal(err)
+		}
+	}()
+
+	if _, err := db.Exec(`CREATE TABLE bench.window (k INT PRIMARY KEY, p INT, b INT, f FLOAT, d DECIMAL (15, 2))`); err != nil {
+		b.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString(`INSERT INTO bench.window VALUES `)
+	set := make(map[int]bool)
+	for i := 0; i < count; i++ {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		k := rand.Intn(1000 * count)
+		for set[k] {
+			k = rand.Intn(1000 * count)
+		}
+		fmt.Fprintf(&buf, "(%d, %d, %d, %d, %d)", k, i%partitions, i%2, k, k)
+		set[k] = true
+	}
+	if _, err := db.Exec(buf.String()); err != nil {
+		b.Fatal(err)
+	}
+
+	query := fmt.Sprintf(`SELECT k, %v(d) OVER (PARTITION BY p ROWS BETWEEN %v PRECEDING AND %v FOLLOWING) FROM bench.window`, windowFn, rows, rows)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rows, err := db.Query(query)
+		if err != nil {
+			b.Fatal(err)
+		}
+		n := 0
+		for rows.Next() {
+			n++
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			b.Fatal(err)
+		}
+		if n != count {
+			b.Fatalf("unexpected result count: %d (expected %d)", n, count)
+		}
+	}
+	b.StopTimer()
+}
+
+func BenchmarkWindow(b *testing.B) {
+	const count = 100000
+	const partitions = 5
+	const windowFn = "min"
+	const rows = 5000
+	ForEachDB(b, func(b *testing.B, db *gosql.DB) {
+		b.Run(fmt.Sprintf("count=%d", count), func(b *testing.B) {
+			b.Run(fmt.Sprintf("partitions=%d", partitions), func(b *testing.B) {
+				b.Run(fmt.Sprintf("windowFn=%q", windowFn), func(b *testing.B) {
+					b.Run(fmt.Sprintf("rows=%d", rows), func(b *testing.B) {
+						runBenchmarkWindow(b, db, count, partitions, windowFn, rows)
+					})
+				})
+			})
+		})
+	})
+}
+
 func runBenchmarkTrackChoices(b *testing.B, db *gosql.DB, batchSize int) {
 	defer func() {
 		if _, err := db.Exec(`DROP TABLE IF EXISTS bench.track_choices`); err != nil {

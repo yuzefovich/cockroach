@@ -167,7 +167,7 @@ func ForEachDB(b *testing.B, fn func(*testing.B, *gosql.DB)) {
 	for _, dbFn := range []func(*testing.B, func(*testing.B, *gosql.DB)){
 		benchmarkCockroach,
 		benchmarkCockroachOpt,
-		benchmarkMultinodeCockroach,
+		//benchmarkMultinodeCockroach,
 		benchmarkPostgres,
 		benchmarkMySQL,
 	} {

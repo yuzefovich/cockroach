@@ -175,9 +175,12 @@ func (n *windowNode) Next(params runParams) (bool, error) {
 		}
 		if !next {
 			n.run.populated = true
+			//start := time.Now()
 			if err := n.computeWindows(params.ctx, params.EvalContext()); err != nil {
 				return false, err
 			}
+			//elapsed := time.Since(start)
+			//fmt.Printf("\n\n=====Computing of Windows took %+v=====\n\n", elapsed)
 			n.run.values.rows = sqlbase.NewRowContainer(
 				params.EvalContext().Mon.MakeBoundAccount(),
 				sqlbase.ColTypeInfoFromResCols(n.run.values.columns),
@@ -656,6 +659,7 @@ func (n *windowNode) computeWindows(ctx context.Context, evalCtx *tree.EvalConte
 		}
 
 		partitions := make(map[string][]tree.IndexedRow)
+		//partitionStart := time.Now()
 
 		if len(windowFn.partitionIdxs) == 0 {
 			// If no partition indexes are included for the window function, all
@@ -712,6 +716,9 @@ func (n *windowNode) computeWindows(ctx context.Context, evalCtx *tree.EvalConte
 			}
 		}
 
+		//partitionDuration := time.Since(partitionStart)
+		//fmt.Printf("\n\n=====Partition took %+v=====\n\n", partitionDuration)
+
 		// For each partition, perform necessary sorting based on the window function's
 		// ORDER BY attribute. After this, perform the window function computation for
 		// each tuple and save the result in n.run.windowValues.
@@ -735,6 +742,8 @@ func (n *windowNode) computeWindows(ctx context.Context, evalCtx *tree.EvalConte
 			// In order to calculate aggregates over a particular window frame,
 			// we need a way to 'reset' the aggregate, so this constructor will be used for that.
 			aggConstructor := windowFn.expr.GetAggregateConstructor()
+
+			//sortingStart := time.Now()
 
 			var peerGrouper peerGroupChecker
 			if windowFn.columnOrdering != nil {
@@ -764,6 +773,9 @@ func (n *windowNode) computeWindows(ctx context.Context, evalCtx *tree.EvalConte
 				peerGrouper = allPeers{}
 			}
 
+			//sortingDuration := time.Since(sortingStart)
+			//fmt.Printf("\n\n=====Sorting of partition %+v took %+v=====\n\n", idx, sortingDuration)
+
 			frameRun.Rows = partition
 			frameRun.ArgIdxStart = windowFn.argIdxStart
 			frameRun.ArgCount = windowFn.argCount
@@ -771,7 +783,10 @@ func (n *windowNode) computeWindows(ctx context.Context, evalCtx *tree.EvalConte
 
 			if frameRun.Frame != nil {
 				builtins.AddAggregateConstructorToFramableAggregate(builtin, aggConstructor)
+				builtin = builtins.MaybeReplaceWithFasterImplementation(builtin, evalCtx, frameRun)
 			}
+
+			//framingStart := time.Now()
 
 			for frameRun.RowIdx < len(partition) {
 				// Compute the size of the current peer group.
@@ -802,6 +817,9 @@ func (n *windowNode) computeWindows(ctx context.Context, evalCtx *tree.EvalConte
 					n.run.windowValues[valRowIdx][windowIdx] = res
 				}
 			}
+
+			//framingDuration := time.Since(framingStart)
+			//fmt.Printf("\n\n=====Framing of partition %+v took %+v=====\n\n", idx, framingDuration)
 		}
 	}
 	return nil

@@ -139,6 +139,7 @@ message ProcessorCoreUnion {
   optional LocalPlanNodeSpec localPlanNode = 24;
   optional ChangeAggregatorSpec changeAggregator = 25;
   optional ChangeFrontierSpec changeFrontier = 26;
+  optional StepperSpec stepper = 27;
 
   reserved 6, 12;
 }
@@ -1010,4 +1011,8 @@ message ChangeFrontierSpec {
     (gogoproto.nullable) = false,
     (gogoproto.customname) = "JobID"
   ];
+}
+
+message StepperSpec {
+  optional uint32 step = 1 [(gogoproto.nullable) = false];
 }

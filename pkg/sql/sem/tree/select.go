@@ -583,7 +583,7 @@ func (node *Order) Format(ctx *FmtCtx) {
 
 // Limit represents a LIMIT clause.
 type Limit struct {
-	Offset, Count Expr
+	Offset, Count, Step Expr
 }
 
 // Format implements the NodeFormatter interface.
@@ -600,6 +600,13 @@ func (node *Limit) Format(ctx *FmtCtx) {
 		}
 		ctx.WriteString("OFFSET ")
 		ctx.FormatNode(node.Offset)
+	}
+	if node.Step != nil {
+		if needSpace {
+			ctx.WriteByte(' ')
+		}
+		ctx.WriteString("STEP ")
+		ctx.FormatNode(node.Step)
 	}
 }
 

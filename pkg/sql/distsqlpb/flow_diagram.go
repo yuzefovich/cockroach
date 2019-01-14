@@ -481,6 +481,11 @@ func (s *ChangeFrontierSpec) summary() (string, []string) {
 	return "ChangeFrontier", []string{}
 }
 
+// summary implements the diagramCellType interface.
+func (s *StepperSpec) summary() (string, []string) {
+	return "Stepper", []string{fmt.Sprintf("STEP: %d", s.Step)}
+}
+
 type diagramCell struct {
 	Title   string   `json:"title"`
 	Details []string `json:"details"`

@@ -813,6 +813,51 @@ func (b *logicalPropsBuilder) buildOffsetProps(offset *OffsetExpr, rel *props.Re
 	}
 }
 
+func (b *logicalPropsBuilder) buildStepProps(step *StepExpr, rel *props.Relational) {
+	BuildSharedProps(b.mem, step, &rel.Shared)
+
+	inputProps := step.Input.Relational()
+
+	// Output Columns
+	// --------------
+	// Output columns are inherited from input.
+	rel.OutputCols = inputProps.OutputCols
+
+	// Not Null Columns
+	// ----------------
+	// Not null columns are inherited from input.
+	rel.NotNullCols = inputProps.NotNullCols
+
+	// Outer Columns
+	// -------------
+	// Outer columns were already derived by buildSharedProps.
+
+	// Functional Dependencies
+	// -----------------------
+	// Inherit functional dependencies from input.
+	rel.FuncDeps.CopyFrom(&inputProps.FuncDeps)
+
+	// Cardinality
+	// -----------
+	// Offset decreases the number of rows that are passed through from input.
+	rel.Cardinality = inputProps.Cardinality
+	if cnst, ok := step.Step.(*ConstExpr); ok {
+		constStep := int64(*cnst.Value.(*tree.DInt))
+		if constStep > 0 {
+			if constStep > math.MaxUint32 {
+				constStep = math.MaxUint32
+			}
+			rel.Cardinality = inputProps.Cardinality.Skip(uint32(constStep))
+		}
+	}
+
+	// Statistics
+	// ----------
+	if !b.disableStats {
+		b.sb.buildStep(step, rel)
+	}
+}
+
 func (b *logicalPropsBuilder) buildMax1RowProps(max1Row *Max1RowExpr, rel *props.Relational) {
 	BuildSharedProps(b.mem, max1Row, &rel.Shared)
 

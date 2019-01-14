@@ -208,6 +208,12 @@ func newColOperator(
 			types.FromColumnTypes(spec.Input[0].ColumnTypes),
 			core.Sorter.OutputOrdering.Columns)
 
+	case core.Stepper != nil:
+		if err := checkNumIn(inputs, 1); err != nil {
+			return nil, err
+		}
+		op = exec.NewStepOp(inputs[0], uint64(core.Stepper.Step))
+
 	default:
 		return nil, errors.Errorf("unsupported processor core %s", core)
 	}

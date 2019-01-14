@@ -323,6 +323,9 @@ func (sb *statisticsBuilder) colStat(colSet opt.ColSet, e RelExpr) *props.Column
 	case opt.OffsetOp:
 		return sb.colStatOffset(colSet, e.(*OffsetExpr))
 
+	case opt.StepOp:
+		return sb.colStatStep(colSet, e.(*StepExpr))
+
 	case opt.Max1RowOp:
 		return sb.colStatMax1Row(colSet, e.(*Max1RowExpr))
 
@@ -1656,6 +1659,50 @@ func (sb *statisticsBuilder) colStatOffset(
 	s := &relProps.Stats
 	inputStats := &offset.Input.Relational().Stats
 	colStat := sb.copyColStatFromChild(colSet, offset, s)
+
+	// Scale distinct count based on the selectivity of the offset operation.
+	colStat.ApplySelectivity(s.Selectivity, inputStats.RowCount)
+	if colSet.SubsetOf(relProps.NotNullCols) {
+		colStat.NullCount = 0
+	}
+	return colStat
+}
+
+// +--------+
+// | Step |
+// +--------+
+
+func (sb *statisticsBuilder) buildStep(step *StepExpr, relProps *props.Relational) {
+	s := &relProps.Stats
+	if zeroCardinality := s.Init(relProps); zeroCardinality {
+		// Short cut if cardinality is 0.
+		return
+	}
+
+	inputStats := &step.Input.Relational().Stats
+
+	// Copy row count from input.
+	s.RowCount = inputStats.RowCount
+
+	// Update row count if offset is a constant and row count is non-zero.
+	if cnst, ok := step.Step.(*ConstExpr); ok && inputStats.RowCount > 0 {
+		stepCnst := *cnst.Value.(*tree.DInt)
+		if stepCnst > 0 {
+			s.Selectivity = 1.0 / float64(stepCnst)
+			s.RowCount *= s.Selectivity
+		}
+	}
+
+	sb.finalizeFromCardinality(relProps)
+}
+
+func (sb *statisticsBuilder) colStatStep(
+	colSet opt.ColSet, step *StepExpr,
+) *props.ColumnStatistic {
+	relProps := step.Relational()
+	s := &relProps.Stats
+	inputStats := &step.Input.Relational().Stats
+	colStat := sb.copyColStatFromChild(colSet, step, s)
 
 	// Scale distinct count based on the selectivity of the offset operation.
 	colStat.ApplySelectivity(s.Selectivity, inputStats.RowCount)

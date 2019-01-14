@@ -160,7 +160,7 @@ func (f *stubFactory) ConstructZigzagJoin(
 }
 
 func (f *stubFactory) ConstructLimit(
-	input exec.Node, limit, offset tree.TypedExpr,
+	input exec.Node, limit, offset, step tree.TypedExpr,
 ) (exec.Node, error) {
 	return struct{}{}, nil
 }

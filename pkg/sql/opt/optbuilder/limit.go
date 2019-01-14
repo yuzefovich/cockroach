@@ -52,4 +52,14 @@ func (b *Builder) buildLimit(limit *tree.Limit, parentScope, inScope *scope) {
 		limit := b.buildScalar(texpr, parentScope, nil, nil, nil)
 		inScope.expr = b.factory.ConstructLimit(input, limit, inScope.makeOrderingChoice())
 	}
+	if limit.Step != nil {
+		op := "STEP"
+		b.assertNoAggregationOrWindowing(limit.Step, op)
+		b.semaCtx.Properties.Require(op, tree.RejectSpecial)
+		parentScope.context = op
+		texpr := parentScope.resolveAndRequireType(limit.Step, types.Int)
+		input := inScope.expr.(memo.RelExpr)
+		step := b.buildScalar(texpr, parentScope, nil, nil, nil)
+		inScope.expr = b.factory.ConstructStep(input, step, inScope.makeOrderingChoice())
+	}
 }

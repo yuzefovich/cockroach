@@ -294,6 +294,7 @@ func (v *planVisitor) visitInternal(plan planNode, name string) {
 		if v.observer.expr != nil {
 			v.expr(name, "count", -1, n.countExpr)
 			v.expr(name, "offset", -1, n.offsetExpr)
+			v.expr(name, "step", -1, n.stepExpr)
 		}
 		n.plan = v.visit(n.plan)
 

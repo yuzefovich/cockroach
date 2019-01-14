@@ -450,6 +450,13 @@ func (node *Limit) docTable(p *PrettyCfg) []pretty.RLTableRow {
 		}
 		res = append(res, p.row("OFFSET", p.Doc(e)))
 	}
+	if node.Step != nil {
+		e := node.Step
+		if p.Simplify {
+			e = StripParens(e)
+		}
+		res = append(res, p.row("STEP", p.Doc(e)))
+	}
 	return res
 }
 

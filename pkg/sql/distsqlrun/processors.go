@@ -1181,6 +1181,13 @@ func newProcessor(
 		}
 		return NewChangeFrontierProcessor(flowCtx, processorID, *core.ChangeFrontier, inputs[0], outputs[0])
 	}
+	if core.Stepper != nil {
+		if err := checkNumInOut(inputs, outputs, 1, 1); err != nil {
+			return nil, err
+		}
+		return NewStepper(flowCtx, processorID, core.Stepper, inputs[0], post, outputs[0])
+
+	}
 	return nil, errors.Errorf("unsupported processor core %s", core)
 }
 

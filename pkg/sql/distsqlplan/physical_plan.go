@@ -657,9 +657,9 @@ func emptyPlan(types []sqlbase.ColumnType, node roachpb.NodeID) PhysicalPlan {
 	}
 }
 
-// AddLimit adds a limit and/or offset to the results of the current plan. If
-// there are multiple result streams, they are joined into a single processor
-// that is placed on the given node.
+// AddLimit adds a limit, an offset and/or a step to the results of the current
+// plan. If there are multiple result streams, they are joined into a single
+// processor that is placed on the given node.
 //
 // For no limit, count should be MaxInt64.
 func (p *PhysicalPlan) AddLimit(

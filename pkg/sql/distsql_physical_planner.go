@@ -291,7 +291,7 @@ func (dsp *DistSQLPlanner) mustWrapNode(node planNode) bool {
 	case *groupNode:
 	case *sortNode:
 	case *filterNode:
-	case *limitNode:
+	//case *limitNode:
 	case *distinctNode:
 	case *unionNode:
 	case *valuesNode:
@@ -417,6 +417,9 @@ func (dsp *DistSQLPlanner) checkSupportForNode(node planNode) (distRecommendatio
 			return cannotDistribute, err
 		}
 		if err := dsp.checkExpr(n.offsetExpr); err != nil {
+			return cannotDistribute, err
+		}
+		if err := dsp.checkExpr(n.stepExpr); err != nil {
 			return cannotDistribute, err
 		}
 		return dsp.checkSupportForNode(n.plan)
@@ -2481,7 +2484,9 @@ func (dsp *DistSQLPlanner) createPlanForNode(
 		if err := n.evalLimit(planCtx.EvalContext()); err != nil {
 			return PhysicalPlan{}, err
 		}
-		if err := plan.AddLimit(n.count, n.offset, planCtx, dsp.nodeDesc.NodeID); err != nil {
+		if n.stepExpr != nil {
+			plan, err = dsp.createPlanForStep(planCtx, n)
+		} else if err := plan.AddLimit(n.count, n.offset, planCtx, dsp.nodeDesc.NodeID); err != nil {
 			return PhysicalPlan{}, err
 		}
 
@@ -3393,6 +3398,23 @@ func (dsp *DistSQLPlanner) createPlanForWindow(
 	if err := windowPlanState.addRenderingIfNecessary(); err != nil {
 		return PhysicalPlan{}, err
 	}
+
+	return plan, nil
+}
+
+func (dsp *DistSQLPlanner) createPlanForStep(
+	planCtx *PlanningCtx, n *limitNode,
+) (PhysicalPlan, error) {
+	plan, err := dsp.createPlanForNode(planCtx, n.plan)
+	if err != nil {
+		return PhysicalPlan{}, err
+	}
+
+	stepperSpec := distsqlpb.ProcessorCoreUnion{
+		Stepper: &distsqlpb.StepperSpec{Step: uint32(n.step)},
+	}
+
+	plan.AddSingleGroupStage(dsp.nodeDesc.NodeID, stepperSpec, distsqlpb.PostProcessSpec{}, plan.ResultTypes)
 
 	return plan, nil
 }

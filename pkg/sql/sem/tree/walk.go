@@ -1078,6 +1078,15 @@ func (stmt *Select) walkStmt(v Visitor) Statement {
 				ret.Limit.Count = e
 			}
 		}
+		if stmt.Limit.Step != nil {
+			e, changed := WalkExpr(v, stmt.Limit.Step)
+			if changed {
+				if ret == stmt {
+					ret = stmt.copyNode()
+				}
+				ret.Limit.Step = e
+			}
+		}
 	}
 	return ret
 }

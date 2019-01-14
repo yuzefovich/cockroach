@@ -92,3 +92,9 @@ message WindowerStats {
   InputStats input_stats = 1 [(gogoproto.nullable) = false];
   int64 max_allocated_mem = 2;
 }
+
+// StepperStats are the stats collected during a stepper run.
+message StepperStats {
+  InputStats input_stats = 1 [(gogoproto.nullable) = false];
+  int64 max_allocated_mem = 2;
+}

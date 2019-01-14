@@ -29,17 +29,19 @@ type limitNode struct {
 	plan       planNode
 	countExpr  tree.TypedExpr
 	offsetExpr tree.TypedExpr
+	stepExpr   tree.TypedExpr
 	evaluated  bool
 	count      int64
 	offset     int64
+	step       int64
 
 	run limitRun
 }
 
 // limit constructs a limitNode based on the LIMIT and OFFSET clauses.
 func (p *planner) Limit(ctx context.Context, n *tree.Limit) (*limitNode, error) {
-	if n == nil || (n.Count == nil && n.Offset == nil) {
-		// No LIMIT nor OFFSET; there is nothing special to do.
+	if n == nil || (n.Count == nil && n.Offset == nil && n.Step == nil) {
+		// No LIMIT, OFFSET, nor STEP; there is nothing special to do.
 		return nil, nil
 	}
 
@@ -52,6 +54,7 @@ func (p *planner) Limit(ctx context.Context, n *tree.Limit) (*limitNode, error) 
 	}{
 		{"LIMIT", n.Count, &res.countExpr},
 		{"OFFSET", n.Offset, &res.offsetExpr},
+		{"STEP", n.Step, &res.stepExpr},
 	}
 
 	// We need to save and restore the previous value of the field in
@@ -118,6 +121,7 @@ func (n *limitNode) Close(ctx context.Context) {
 func (n *limitNode) estimateLimit() {
 	n.count = math.MaxInt64
 	n.offset = 0
+	n.step = 1
 
 	// Use simple integer datum if available.
 	// The limit can be a simple DInt here either because it was
@@ -134,21 +138,33 @@ func (n *limitNode) estimateLimit() {
 			n.offset = int64(i)
 		}
 	}
+	if n.stepExpr != nil {
+		if i, ok := tree.AsDInt(n.stepExpr); ok {
+			n.step = int64(i)
+			if n.step == 0 {
+				n.step = 1
+			}
+		}
+	}
 }
 
-// evalLimit evaluates the Count and Offset fields. If Count is missing, the
-// value is MaxInt64. If Offset is missing, the value is 0
+// evalLimit evaluates the Count, Offset, and Step fields. If Count is missing,
+// the value is MaxInt64. If Offset is missing, the value is 0. If Step is
+// missing the value is 1.
 func (n *limitNode) evalLimit(evalCtx *tree.EvalContext) error {
 	n.count = math.MaxInt64
 	n.offset = 0
+	n.step = 1
 
 	data := []struct {
 		name string
 		src  tree.TypedExpr
 		dst  *int64
+		def  int64
 	}{
-		{"LIMIT", n.countExpr, &n.count},
-		{"OFFSET", n.offsetExpr, &n.offset},
+		{"LIMIT", n.countExpr, &n.count, math.MaxInt64},
+		{"OFFSET", n.offsetExpr, &n.offset, 0},
+		{"STEP", n.stepExpr, &n.step, 1},
 	}
 
 	for _, datum := range data {
@@ -170,6 +186,9 @@ func (n *limitNode) evalLimit(evalCtx *tree.EvalContext) error {
 			}
 			*datum.dst = val
 		}
+	}
+	if n.step == 0 {
+		return fmt.Errorf("zero value for STEP")
 	}
 	n.evaluated = true
 	return nil

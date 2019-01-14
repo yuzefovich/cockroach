@@ -538,7 +538,7 @@ func newNameFromStr(s string) *tree.Name {
 %token <str> SERIALIZABLE SERVER SESSION SESSIONS SESSION_USER SET SETTING SETTINGS
 %token <str> SHOW SIMILAR SIMPLE SMALLINT SMALLSERIAL SNAPSHOT SOME SPLIT SQL
 
-%token <str> START STATISTICS STATUS STDIN STRICT STRING STORE STORED STORING SUBSTRING
+%token <str> START STATISTICS STATUS STDIN STEP STRICT STRING STORE STORED STORING SUBSTRING
 %token <str> SYMMETRIC SYNTAX SYSTEM SUBSCRIPTION
 
 %token <str> TABLE TABLES TEMP TEMPLATE TEMPORARY TESTING_RANGES EXPERIMENTAL_RANGES TESTING_RELOCATE EXPERIMENTAL_RELOCATE TEXT THEN
@@ -838,7 +838,7 @@ func newNameFromStr(s string) *tree.Name {
 %type <bool> opt_unique
 %type <bool> opt_using_gin_btree
 
-%type <*tree.Limit> limit_clause offset_clause opt_limit_clause
+%type <*tree.Limit> limit_clause offset_clause step_clause opt_limit_clause
 %type <tree.Expr> select_limit_value
 %type <tree.Expr> opt_select_fetch_first_value
 %type <empty> row_or_rows
@@ -5903,6 +5903,7 @@ select_limit:
   }
 | limit_clause
 | offset_clause
+| step_clause
 
 opt_limit_clause:
   limit_clause
@@ -5934,6 +5935,12 @@ offset_clause:
 | OFFSET c_expr row_or_rows
   {
     $$.val = &tree.Limit{Offset: $2.expr()}
+  }
+
+step_clause:
+  STEP a_expr
+  {
+    $$.val = &tree.Limit{Step: $2.expr()}
   }
 
 select_limit_value:
@@ -9257,5 +9264,6 @@ reserved_keyword:
 cockroachdb_extra_reserved_keyword:
   INDEX
 | NOTHING
+| STEP
 
 %%

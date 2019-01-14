@@ -162,9 +162,9 @@ func (s *opTestInput) Next() ColBatch {
 	}
 
 	if s.useSel {
-		s.rng.Shuffle(len(s.selection), func(i, j int) {
+		/*s.rng.Shuffle(len(s.selection), func(i, j int) {
 			s.selection[i], s.selection[j] = s.selection[j], s.selection[i]
-		})
+		})*/
 
 		s.batch.SetSelection(true)
 		copy(s.batch.Selection(), s.selection)

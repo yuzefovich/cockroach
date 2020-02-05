@@ -420,6 +420,10 @@ func (c *CustomFuncs) EmptyOrdering() physical.OrderingChoice {
 	return physical.OrderingChoice{}
 }
 
+func (c *CustomFuncs) AllowsAnyOrdering(ord physical.OrderingChoice) bool {
+	return ord.Any()
+}
+
 // OrderingIntersects returns true if <ordering1> and <ordering2> have an
 // intersection. See OrderingChoice.Intersection for more information.
 func (c *CustomFuncs) OrderingIntersects(ordering1, ordering2 physical.OrderingChoice) bool {
@@ -1476,6 +1480,59 @@ func (c *CustomFuncs) WindowPartition(priv *memo.WindowPrivate) opt.ColSet {
 // WindowOrdering returns the ordering used by the window function.
 func (c *CustomFuncs) WindowOrdering(private *memo.WindowPrivate) physical.OrderingChoice {
 	return private.Ordering
+}
+
+// UsesRangeWindowFrame returns true if the window item has RANGE mode of
+// framing.
+func (c *CustomFuncs) UsesRangeWindowFrame(private *memo.WindowsItemPrivate) bool {
+	return private.Frame.Mode == tree.RANGE
+}
+
+// ReplaceWindowsItem returns a new list that is a copy of the given list,
+// except that the given search item has been replaced by the given replace
+// item. If the list contains the search item multiple times, then only the
+// first instance is replaced. If the list does not contain the item, then the
+// method panics.
+func (c *CustomFuncs) ReplaceWindowsItem(
+	items memo.WindowsExpr, search *memo.WindowsItem, replace *memo.WindowsItem,
+) memo.WindowsExpr {
+	newItems := make([]memo.WindowsItem, len(items))
+	for i := range items {
+		if search == &items[i] {
+			copy(newItems, items[:i])
+			newItems[i] = *replace
+			copy(newItems[i+1:], items[i+1:])
+			return newItems
+		}
+	}
+	panic(errors.AssertionFailedf("item to replace is not in the list: %v", search))
+}
+
+// RemoveWindowRangeOffsets returns a new window item with the default window
+// frame (which is RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), only
+// keeping the frame exclusion of the given item.
+func (c *CustomFuncs) RemoveWindowRangeOffsets(item *memo.WindowsItem) *memo.WindowsItem {
+	extract := func(fn opt.ScalarExpr) opt.ScalarExpr {
+		for {
+			switch t := fn.(type) {
+			case *memo.WindowFromOffsetExpr:
+				fn = t.Input
+			case *memo.WindowToOffsetExpr:
+				fn = t.Input
+			default:
+				return fn
+			}
+		}
+	}
+	newPrivate := &memo.WindowsItemPrivate{
+		Frame: memo.WindowFrame{
+			EndBoundType:   tree.CurrentRow,
+			FrameExclusion: item.Frame.FrameExclusion,
+		},
+		Col: item.Col,
+	}
+	newItem := c.f.ConstructWindowsItem(extract(item.Function), newPrivate)
+	return &newItem
 }
 
 // ----------------------------------------------------------------------

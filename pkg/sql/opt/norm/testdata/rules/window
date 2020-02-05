@@ -92,7 +92,36 @@ project
       └── windows
            └── rank [type=int]
 
+# --------------------------------------------------
+# RemoveWindowRangeOffsets
+# --------------------------------------------------
+
+norm expect=RemoveWindowRangeOffsets
+SELECT sum(i) OVER (PARTITION BY i ORDER BY i RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM a
+----
+project
+ ├── columns: sum:6(decimal)
+ └── window partition=(2)
+      ├── columns: i:2(int) sum:6(decimal)
+      ├── scan a
+      │    └── columns: i:2(int)
+      └── windows
+           └── sum [type=decimal, outer=(2)]
+                └── variable: i [type=int]
+
+norm expect=RemoveWindowRangeOffsets
+SELECT sum(i) OVER (PARTITION BY i, f ORDER BY i RANGE 1 PRECEDING EXCLUDE NO OTHERS) FROM a
+----
+
+
+norm expect=RemoveWindowRangeOffsets
+SELECT sum(i) OVER (PARTITION BY i ORDER BY i RANGE BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) FROM a
+----
+
+
+# --------------------------------------------------
 # PushSelectIntoWindow
+# --------------------------------------------------
 
 norm expect=PushSelectIntoWindow
 SELECT * FROM (SELECT i, rank() OVER (PARTITION BY i) FROM a) WHERE i > 4

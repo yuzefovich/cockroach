@@ -45,6 +45,28 @@ $input
     (SimplifyWindowOrdering $input $private)
 )
 
+# RemoveWindowRangeOffsets removes the offset boundaries from the window frame
+# with RANGE mode (making the window frame equivalent to default with the
+# exception of frame exclusion which is kept as in the original) when any
+# ordering is allowed because in such scenario all rows are considered equal
+# (i.e. all rows are in "range" for every row).
+[RemoveWindowRangeOffsets, Normalize]
+(Window
+    $input:*
+    $funcList:[
+    ...
+    $item:(WindowsItem (WindowFromOffset | WindowToOffset) $itemPrivate:*) & (UsesRangeWindowFrame $itemPrivate)
+    ...
+    ]
+    $private:* & (AllowsAnyOrdering (WindowOrdering $private))
+)
+=>
+(Window
+    $input
+    (ReplaceWindowsItem $funcList $item (RemoveWindowRangeOffsets $item))
+    $private
+)
+
 # PushSelectIntoWindow pushes down a Select which can be satisfied by only the
 # functional closure of the columns being partitioned over. This is valid
 # because it's "all-or-nothing" - we only entirely eliminate a partition or

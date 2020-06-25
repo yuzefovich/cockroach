@@ -100,3 +100,15 @@ SELECT v FROM kv ORDER BY v DESC
 1
 1
 NULL
+
+# Check that EXPLAIN (OPT) variants are supported.
+query T
+EXPLAIN (OPT) SELECT * FROM kv
+----
+scan kv
+
+statement ok
+EXPLAIN (OPT, VERBOSE) SELECT * FROM kv
+
+statement ok
+EXPLAIN (OPT, ENV) SELECT * FROM kv

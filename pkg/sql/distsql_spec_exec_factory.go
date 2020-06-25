@@ -742,7 +742,7 @@ func (e *distSQLSpecExecFactory) ConstructPlan(
 func (e *distSQLSpecExecFactory) ConstructExplainOpt(
 	plan string, envOpts exec.ExplainEnvData,
 ) (exec.Node, error) {
-	return nil, unimplemented.NewWithIssue(47473, "experimental opt-driven distsql planning: explain opt")
+	return constructExplainOpt(e, e.planner, plan, envOpts)
 }
 
 func (e *distSQLSpecExecFactory) ConstructExplain(

@@ -17,7 +17,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
-	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
@@ -982,99 +981,11 @@ func (e *urlOutputter) finish() (url.URL, error) {
 	}, nil
 }
 
-// showEnv implements EXPLAIN (opt, env). It returns a node which displays
-// the environment a query was run in.
-func (ef *execFactory) showEnv(plan string, envOpts exec.ExplainEnvData) (exec.Node, error) {
-	var out urlOutputter
-
-	c := makeStmtEnvCollector(
-		ef.planner.EvalContext().Context,
-		ef.planner.extendedEvalCtx.InternalExecutor.(*InternalExecutor),
-	)
-
-	// Show the version of Cockroach running.
-	if err := c.PrintVersion(&out.buf); err != nil {
-		return nil, err
-	}
-	out.writef("")
-	// Show the values of any non-default session variables that can impact
-	// planning decisions.
-	if err := c.PrintSettings(&out.buf); err != nil {
-		return nil, err
-	}
-
-	// Show the definition of each referenced catalog object.
-	for i := range envOpts.Sequences {
-		out.writef("")
-		if err := c.PrintCreateSequence(&out.buf, &envOpts.Sequences[i]); err != nil {
-			return nil, err
-		}
-	}
-
-	// TODO(justin): it might also be relevant in some cases to print the create
-	// statements for tables referenced via FKs in these tables.
-	for i := range envOpts.Tables {
-		out.writef("")
-		if err := c.PrintCreateTable(&out.buf, &envOpts.Tables[i]); err != nil {
-			return nil, err
-		}
-		out.writef("")
-
-		// In addition to the schema, it's important to know what the table
-		// statistics on each table are.
-
-		// NOTE: We don't include the histograms because they take up a ton of
-		// vertical space. Unfortunately this means that in some cases we won't be
-		// able to reproduce a particular plan.
-		err := c.PrintTableStats(&out.buf, &envOpts.Tables[i], true /* hideHistograms */)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	for i := range envOpts.Views {
-		out.writef("")
-		if err := c.PrintCreateView(&out.buf, &envOpts.Views[i]); err != nil {
-			return nil, err
-		}
-	}
-
-	// Show the query running. Note that this is the *entire* query, including
-	// the "EXPLAIN (opt, env)" preamble.
-	out.writef("%s;\n----\n%s", ef.planner.stmt.AST.String(), plan)
-
-	url, err := out.finish()
-	if err != nil {
-		return nil, err
-	}
-	return &valuesNode{
-		columns:          sqlbase.ExplainOptColumns,
-		tuples:           [][]tree.TypedExpr{{tree.NewDString(url.String())}},
-		specifiedInQuery: true,
-	}, nil
-}
-
 // ConstructExplainOpt is part of the exec.Factory interface.
 func (ef *execFactory) ConstructExplainOpt(
-	planText string, envOpts exec.ExplainEnvData,
+	plan string, envOpts exec.ExplainEnvData,
 ) (exec.Node, error) {
-	// If this was an EXPLAIN (opt, env), we need to run a bunch of auxiliary
-	// queries to fetch the environment info.
-	if envOpts.ShowEnv {
-		return ef.showEnv(planText, envOpts)
-	}
-
-	var rows [][]tree.TypedExpr
-	ss := strings.Split(strings.Trim(planText, "\n"), "\n")
-	for _, line := range ss {
-		rows = append(rows, []tree.TypedExpr{tree.NewDString(line)})
-	}
-
-	return &valuesNode{
-		columns:          sqlbase.ExplainOptColumns,
-		tuples:           rows,
-		specifiedInQuery: true,
-	}, nil
+	return constructExplainOpt(ef, ef.planner, plan, envOpts)
 }
 
 // ConstructExplain is part of the exec.Factory interface.

@@ -293,6 +293,20 @@ func hasDuplicates(cols []exec.NodeColumnOrdinal) bool {
 	return false
 }
 
+func constructBufferPlanNode(input planNode, label string) *bufferNode {
+	return &bufferNode{
+		plan:  input,
+		label: label,
+	}
+}
+
+func constructScanBufferPlanNode(ref *bufferNode, label string) *scanBufferNode {
+	return &scanBufferNode{
+		buffer: ref,
+		label:  label,
+	}
+}
+
 func constructVirtualScan(
 	ef exec.Factory,
 	p *planner,

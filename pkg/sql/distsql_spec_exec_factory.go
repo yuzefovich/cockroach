@@ -11,6 +11,8 @@
 package sql
 
 import (
+	"fmt"
+
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/execinfrapb"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
@@ -125,18 +127,19 @@ func (e *distSQLSpecExecFactory) ConstructValues(
 		physPlan         *PhysicalPlan
 		err              error
 		planNodesToClose []planNode
+		rootPlanNode     planNode
 	)
 	planCtx := e.getPlanCtx(recommendation)
 	if mustWrapValuesNode(planCtx, true /* specifiedInQuery */) {
 		// The valuesNode must be wrapped into the physical plan, so we cannot
 		// avoid creating it. See mustWrapValuesNode for more details.
-		v := &valuesNode{
+		rootPlanNode = &valuesNode{
 			columns:          cols,
 			tuples:           rows,
 			specifiedInQuery: true,
 		}
-		planNodesToClose = []planNode{v}
-		physPlan, err = e.dsp.wrapPlan(planCtx, v)
+		planNodesToClose = []planNode{rootPlanNode}
+		physPlan, err = e.dsp.wrapPlan(planCtx, rootPlanNode)
 	} else {
 		// We can create a spec for the values processor, so we don't create a
 		// valuesNode.
@@ -149,6 +152,7 @@ func (e *distSQLSpecExecFactory) ConstructValues(
 	return planMaybePhysical{physPlan: &physicalPlanTop{
 		PhysicalPlan:     physPlan,
 		planNodesToClose: planNodesToClose,
+		rootPlanNode:     rootPlanNode,
 	}}, nil
 }
 
@@ -170,6 +174,7 @@ func (e *distSQLSpecExecFactory) ConstructScan(
 				return planMaybePhysical{physPlan: &physicalPlanTop{
 					PhysicalPlan:     physPlan,
 					planNodesToClose: []planNode{d},
+					rootPlanNode:     d,
 				}}, nil
 			},
 		)
@@ -890,13 +895,45 @@ func (e *distSQLSpecExecFactory) ConstructAlterTableRelocate(
 func (e *distSQLSpecExecFactory) ConstructBuffer(
 	input exec.Node, label string,
 ) (exec.BufferNode, error) {
-	return nil, unimplemented.NewWithIssue(47473, "experimental opt-driven distsql planning: buffer")
+	var inputPlanNode planNode
+	var ok bool
+	origPhysPlan, plan := getPhysPlan(input)
+	if inputPlanNode, ok = plan.physPlan.rootPlanNode.(planNode); !ok {
+		panic(fmt.Sprintf("unexpectedly input is %T", plan.physPlan.rootPlanNode))
+	}
+	buffer := constructBufferPlanNode(inputPlanNode, label)
+	physPlan, err := e.dsp.wrapPlan(e.getPlanCtx(cannotDistribute), buffer)
+	if err != nil {
+		return nil, err
+	}
+	physPlan.ResultColumns = origPhysPlan.ResultColumns
+	return planMaybePhysical{physPlan: &physicalPlanTop{
+		PhysicalPlan:     physPlan,
+		planNodesToClose: append(plan.physPlan.planNodesToClose, buffer),
+		rootPlanNode:     buffer,
+	}}, nil
 }
 
 func (e *distSQLSpecExecFactory) ConstructScanBuffer(
 	ref exec.BufferNode, label string,
 ) (exec.Node, error) {
-	return nil, unimplemented.NewWithIssue(47473, "experimental opt-driven distsql planning: scan buffer")
+	var buffer *bufferNode
+	var ok bool
+	origPhysPlan, plan := getPhysPlan(ref)
+	if buffer, ok = plan.physPlan.rootPlanNode.(*bufferNode); !ok {
+		panic(fmt.Sprintf("unexpectedly ref is %T", plan.physPlan.rootPlanNode))
+	}
+	scanBuffer := constructScanBufferPlanNode(buffer, label)
+	physPlan, err := e.dsp.wrapPlan(e.getPlanCtx(cannotDistribute), scanBuffer)
+	if err != nil {
+		return nil, err
+	}
+	physPlan.ResultColumns = origPhysPlan.ResultColumns
+	return planMaybePhysical{physPlan: &physicalPlanTop{
+		PhysicalPlan:     physPlan,
+		planNodesToClose: append(plan.physPlan.planNodesToClose, scanBuffer),
+		rootPlanNode:     scanBuffer,
+	}}, nil
 }
 
 func (e *distSQLSpecExecFactory) ConstructRecursiveCTE(

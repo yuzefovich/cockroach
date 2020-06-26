@@ -300,6 +300,7 @@ type physicalPlanTop struct {
 	// closed explicitly since we don't have a planNode tree that performs the
 	// closure.
 	planNodesToClose []planNode
+	rootPlanNode     planNode
 }
 
 func (p *physicalPlanTop) Close(ctx context.Context) {
@@ -317,6 +318,10 @@ type planMaybePhysical struct {
 	// physPlan (when non-nil) contains the physical plan that has not yet
 	// been finalized.
 	physPlan *physicalPlanTop
+}
+
+// TODO(yuzefovich): figure this out.
+func (p planMaybePhysical) BufferNodeMarker() {
 }
 
 func (p *planMaybePhysical) isPhysicalPlan() bool {

@@ -36,14 +36,15 @@ func collectProbeOuter(
 				return nResults
 			}
 
-			hj.probeState.probeRowUnmatched[nResults] = currentID == 0
-			if currentID > 0 {
+			if currentID != 0 {
+				hj.probeState.probeRowMatched[nResults] = true
 				hj.probeState.buildIdx[nResults] = int(currentID - 1)
 			} else {
-				// If currentID == 0, then probeRowUnmatched will have been set - and
-				// we set the corresponding buildIdx to zero so that (as long as the
-				// build hash table has at least one row) we can copy the values vector
-				// without paying attention to probeRowUnmatched.
+				// If currentID == 0, then current probe row is not matched. We
+				// also set the corresponding buildIdx to zero so that (as long
+				// as the build hash table has at least one row) we can copy
+				// the values vector without paying attention to probeRowMatched.
+				hj.probeState.probeRowMatched[nResults] = false
 				hj.probeState.buildIdx[nResults] = 0
 			}
 			hj.probeState.probeIdx[nResults] = getIdx(i, sel, useSel)
@@ -115,7 +116,7 @@ func collectAnti(
 func distinctCollectProbeOuter(hj *hashJoiner, batchSize int, sel []int, useSel bool) {
 	// Early bounds checks.
 	_ = hj.ht.probeScratch.groupID[batchSize-1]
-	_ = hj.probeState.probeRowUnmatched[batchSize-1]
+	_ = hj.probeState.probeRowMatched[batchSize-1]
 	_ = hj.probeState.buildIdx[batchSize-1]
 	_ = hj.probeState.probeIdx[batchSize-1]
 	if useSel {
@@ -124,9 +125,9 @@ func distinctCollectProbeOuter(hj *hashJoiner, batchSize int, sel []int, useSel 
 	for i := int(0); i < batchSize; i++ {
 		// Index of keys and outputs in the hash table is calculated as ID - 1.
 		id := hj.ht.probeScratch.groupID[i]
-		rowUnmatched := id == 0
-		hj.probeState.probeRowUnmatched[i] = rowUnmatched
-		if !rowUnmatched {
+		rowMatched := id != 0
+		hj.probeState.probeRowMatched[i] = rowMatched
+		if rowMatched {
 			hj.probeState.buildIdx[i] = int(id - 1)
 		}
 		hj.probeState.probeIdx[i] = getIdx(i, sel, useSel)

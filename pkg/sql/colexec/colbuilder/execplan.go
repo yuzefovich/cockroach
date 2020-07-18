@@ -775,18 +775,46 @@ func NewColOperator(
 					ctx, flowCtx, hashJoinerMemMonitorName,
 				)
 			}
+
+			joinType := core.HashJoiner.Type
+			onExpr := core.HashJoiner.OnExpr
+			if !joinType.ShouldIncludeRightColsInOutput() && onExpr.Empty() {
+				result.ColumnTypes = make([]*types.T, len(leftTypes))
+				copy(result.ColumnTypes, leftTypes)
+			} else {
+				result.ColumnTypes = make([]*types.T, len(leftTypes)+len(rightTypes))
+				copy(result.ColumnTypes, leftTypes)
+				copy(result.ColumnTypes[len(leftTypes):], rightTypes)
+			}
+
+			var onExprChain colexecbase.Operator
+			var onExprInput *colexec.SingleBatchOperator
+			if !onExpr.Empty() {
+				onExprInput = &colexec.SingleBatchOperator{}
+				result.Op = onExprInput
+				// Note that result.ColumnTypes will be updated accordingly.
+				if err = result.planAndMaybeWrapOnExprAsFilter(
+					ctx, flowCtx, args, onExpr, factory,
+				); err != nil {
+					return r, err
+				}
+				onExprChain = result.Op
+			}
 			// It is valid for empty set of equality columns to be considered as
 			// "key" (for example, the input has at most 1 row). However, hash
 			// joiner, in order to handle NULL values correctly, needs to think
 			// that an empty set of equality columns doesn't form a key.
 			rightEqColsAreKey := core.HashJoiner.RightEqColumnsAreKey && len(core.HashJoiner.RightEqColumns) > 0
 			hjSpec, err := colexec.MakeHashJoinerSpec(
-				core.HashJoiner.Type,
+				joinType,
 				core.HashJoiner.LeftEqColumns,
 				core.HashJoiner.RightEqColumns,
 				leftTypes,
 				rightTypes,
+				result.ColumnTypes,
 				rightEqColsAreKey,
+				onExprChain,
+				onExprInput,
 			)
 			if err != nil {
 				return r, err
@@ -846,22 +874,21 @@ func NewColOperator(
 					args.TestingKnobs.SpillingCallbackFn,
 				)
 			}
-			result.ColumnTypes = make([]*types.T, len(leftTypes)+len(rightTypes))
-			copy(result.ColumnTypes, leftTypes)
-			if !core.HashJoiner.Type.ShouldIncludeRightColsInOutput() {
-				result.ColumnTypes = result.ColumnTypes[:len(leftTypes):len(leftTypes)]
-			} else {
-				copy(result.ColumnTypes[len(leftTypes):], rightTypes)
-			}
 
-			if !core.HashJoiner.OnExpr.Empty() && core.HashJoiner.Type == sqlbase.InnerJoin {
-				if err =
-					result.planAndMaybeWrapOnExprAsFilter(
-						ctx, flowCtx, args, core.HashJoiner.OnExpr, factory,
-					); err != nil {
-					return r, err
-				}
+			// Hash joiner might be outputting batches that contain auxiliary
+			// columns, and we need to project them away.
+			var expectedOutputTypes []*types.T
+			if joinType.ShouldIncludeRightColsInOutput() {
+				expectedOutputTypes = append(leftTypes, rightTypes...)
+			} else {
+				expectedOutputTypes = leftTypes
 			}
+			projection := make([]uint32, len(expectedOutputTypes))
+			for i := range projection {
+				projection[i] = uint32(i)
+			}
+			result.Op = colexec.NewSimpleProjectOp(result.Op, len(result.ColumnTypes), projection)
+			result.ColumnTypes = expectedOutputTypes
 
 		case core.MergeJoiner != nil:
 			if err := checkNumIn(inputs, 2); err != nil {
@@ -1214,12 +1241,7 @@ func (r *postProcessResult) planPostProcessSpec(
 			r.InternalMemUsage += renderInternalMem
 			renderedCols = append(renderedCols, uint32(outputIdx))
 		}
-		r.Op = colexec.NewSimpleProjectOp(r.Op, len(r.ColumnTypes), renderedCols)
-		newTypes := make([]*types.T, len(renderedCols))
-		for i, j := range renderedCols {
-			newTypes[i] = r.ColumnTypes[j]
-		}
-		r.ColumnTypes = newTypes
+		r.addProjection(renderedCols)
 	}
 	if post.Offset != 0 {
 		r.Op = colexec.NewOffsetOp(r.Op, int(post.Offset))
@@ -1345,22 +1367,22 @@ func (r *postProcessResult) planFilterExpr(
 		r.Op = colexec.NewZeroOp(r.Op)
 		return nil
 	}
-	var filterColumnTypes []*types.T
-	r.Op, _, filterColumnTypes, selectionInternalMem, err = planSelectionOperators(
+	oldColumnTypes := r.ColumnTypes
+	r.Op, _, r.ColumnTypes, selectionInternalMem, err = planSelectionOperators(
 		ctx, evalCtx, expr, r.ColumnTypes, r.Op, acc, factory,
 	)
 	if err != nil {
 		return errors.Wrapf(err, "unable to columnarize filter expression %q", filter)
 	}
 	r.InternalMemUsage += selectionInternalMem
-	if len(filterColumnTypes) > len(r.ColumnTypes) {
+	if len(r.ColumnTypes) > len(oldColumnTypes) {
 		// Additional columns were appended to store projections while evaluating
 		// the filter. Project them away.
 		var outputColumns []uint32
-		for i := range r.ColumnTypes {
+		for i := range oldColumnTypes {
 			outputColumns = append(outputColumns, uint32(i))
 		}
-		r.Op = colexec.NewSimpleProjectOp(r.Op, len(filterColumnTypes), outputColumns)
+		r.addProjection(outputColumns)
 	}
 	return nil
 }

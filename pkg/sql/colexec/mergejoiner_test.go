@@ -1609,6 +1609,90 @@ var mjTestCases = []*joinTestCase{
 		rightEqCols:  []uint32{0},
 		expected:     tuples{{nil}, {true}, {true}},
 	},
+	//{
+	//	description:  "LEFT SEMI JOIN test with ON expression (filter only on left)",
+	//	joinType:     sqlbase.JoinType_LEFT_SEMI,
+	//	leftTypes:    []*types.T{types.Int, types.Int},
+	//	rightTypes:   []*types.T{types.Int, types.Int},
+	//	leftTuples:   tuples{{nil, 0}, {1, 10}, {2, 20}, {3, nil}, {4, 40}},
+	//	rightTuples:  tuples{{1, nil}, {3, 13}, {4, 14}},
+	//	leftOutCols:  []uint32{0, 1},
+	//	rightOutCols: []uint32{},
+	//	leftEqCols:   []uint32{0},
+	//	rightEqCols:  []uint32{0},
+	//	onExpr:       execinfrapb.Expression{Expr: "@1 < 4"},
+	//	expected:     tuples{{1, 10}, {3, nil}},
+	//},
+	//{
+	//	description:  "LEFT SEMI JOIN test with ON expression (filter only on right)",
+	//	joinType:     sqlbase.JoinType_LEFT_SEMI,
+	//	leftTypes:    []*types.T{types.Int, types.Int},
+	//	rightTypes:   []*types.T{types.Int, types.Int},
+	//	leftTuples:   tuples{{nil, 0}, {1, 10}, {2, 20}, {3, nil}, {4, 40}},
+	//	rightTuples:  tuples{{1, nil}, {3, 13}, {4, 14}},
+	//	leftOutCols:  []uint32{0, 1},
+	//	rightOutCols: []uint32{},
+	//	leftEqCols:   []uint32{0},
+	//	rightEqCols:  []uint32{0},
+	//	onExpr:       execinfrapb.Expression{Expr: "@4 < 14"},
+	//	expected:     tuples{{3, nil}},
+	//},
+	//{
+	//	description:  "LEFT SEMI JOIN test with ON expression (filter on both)",
+	//	joinType:     sqlbase.JoinType_LEFT_SEMI,
+	//	leftTypes:    []*types.T{types.Int, types.Int},
+	//	rightTypes:   []*types.T{types.Int, types.Int},
+	//	leftTuples:   tuples{{nil, 0}, {1, 10}, {2, 20}, {3, nil}, {4, 40}},
+	//	rightTuples:  tuples{{1, nil}, {3, 13}, {4, 14}},
+	//	leftOutCols:  []uint32{0, 1},
+	//	rightOutCols: []uint32{},
+	//	leftEqCols:   []uint32{0},
+	//	rightEqCols:  []uint32{0},
+	//	onExpr:       execinfrapb.Expression{Expr: "@2 + @3 < 50"},
+	//	expected:     tuples{{1, 10}, {4, 40}},
+	//},
+	//{
+	//	description:  "LEFT ANTI JOIN test with ON expression (filter only on left)",
+	//	joinType:     sqlbase.JoinType_LEFT_ANTI,
+	//	leftTypes:    []*types.T{types.Int, types.Int},
+	//	rightTypes:   []*types.T{types.Int, types.Int},
+	//	leftTuples:   tuples{{nil, 0}, {1, 10}, {2, 20}, {3, nil}, {4, 40}},
+	//	rightTuples:  tuples{{1, nil}, {3, 13}, {4, 14}},
+	//	leftOutCols:  []uint32{0, 1},
+	//	rightOutCols: []uint32{},
+	//	leftEqCols:   []uint32{0},
+	//	rightEqCols:  []uint32{0},
+	//	onExpr:       execinfrapb.Expression{Expr: "@1 < 4"},
+	//	expected:     tuples{{nil, 0}, {2, 20}, {4, 40}},
+	//},
+	//{
+	//	description:  "LEFT ANTI JOIN test with ON expression (filter only on right)",
+	//	joinType:     sqlbase.JoinType_LEFT_ANTI,
+	//	leftTypes:    []*types.T{types.Int, types.Int},
+	//	rightTypes:   []*types.T{types.Int, types.Int},
+	//	leftTuples:   tuples{{nil, 0}, {1, 10}, {2, 20}, {3, nil}, {4, 40}},
+	//	rightTuples:  tuples{{1, nil}, {3, 13}, {4, 14}},
+	//	leftOutCols:  []uint32{0, 1},
+	//	rightOutCols: []uint32{},
+	//	leftEqCols:   []uint32{0},
+	//	rightEqCols:  []uint32{0},
+	//	onExpr:       execinfrapb.Expression{Expr: "@4 < 14"},
+	//	expected:     tuples{{nil, 0}, {1, 10}, {2, 20}, {4, 40}},
+	//},
+	//{
+	//	description:  "LEFT ANTI JOIN test with ON expression (filter on both)",
+	//	joinType:     sqlbase.JoinType_LEFT_ANTI,
+	//	leftTypes:    []*types.T{types.Int, types.Int},
+	//	rightTypes:   []*types.T{types.Int, types.Int},
+	//	leftTuples:   tuples{{nil, 0}, {1, 10}, {2, 20}, {3, nil}, {4, 40}},
+	//	rightTuples:  tuples{{1, nil}, {3, 13}, {4, 14}},
+	//	leftOutCols:  []uint32{0, 1},
+	//	rightOutCols: []uint32{},
+	//	leftEqCols:   []uint32{0},
+	//	rightEqCols:  []uint32{0},
+	//	onExpr:       execinfrapb.Expression{Expr: "@2 + @3 < 50"},
+	//	expected:     tuples{{nil, 0}, {2, 20}, {3, nil}},
+	//},
 }
 
 func TestMergeJoiner(t *testing.T) {
@@ -1632,6 +1716,11 @@ func TestMergeJoiner(t *testing.T) {
 		monitors []*mon.BytesMonitor
 	)
 	for _, tc := range mjTestCases {
+		if !tc.onExpr.Empty() && tc.joinType != sqlbase.InnerJoin {
+			// Merge joiner doesn't yet support ON expressions for join types
+			// other than INNER.
+			continue
+		}
 		for _, tc := range tc.mutateTypes() {
 			tc.init()
 

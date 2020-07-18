@@ -424,3 +424,32 @@ func (e *BatchSchemaSubsetEnforcer) SetTypes(typs []*types.T) {
 	e.typs = typs
 	e.subsetEndIdx = len(typs)
 }
+
+// SingleBatchOperator is a helper colexecbase.Operator that returns the
+// provided batch on the first call to Next() and zero batch on all consequent
+// calls (until it is reset). It must be reset before it can be used for the
+// first time.
+type SingleBatchOperator struct {
+	colexecbase.ZeroInputNode
+	NonExplainable
+
+	nexted bool
+	batch  coldata.Batch
+}
+
+var _ colexecbase.Operator = &SingleBatchOperator{}
+
+func (o *SingleBatchOperator) Init() {}
+
+func (o *SingleBatchOperator) Next(context.Context) coldata.Batch {
+	if o.nexted {
+		return coldata.ZeroBatch
+	}
+	o.nexted = true
+	return o.batch
+}
+
+func (o *SingleBatchOperator) reset(batch coldata.Batch) {
+	o.nexted = false
+	o.batch = batch
+}

@@ -1083,7 +1083,9 @@ func BenchmarkHashJoiner(b *testing.B) {
 											joinType,
 											[]uint32{0, 1}, []uint32{2, 3},
 											sourceTypes, sourceTypes,
-											rightDistinct,
+											append(sourceTypes, sourceTypes...), rightDistinct,
+											nil, /* onExprChain */
+											nil, /* onExprInput */
 										)
 										require.NoError(b, err)
 										hj := NewHashJoiner(

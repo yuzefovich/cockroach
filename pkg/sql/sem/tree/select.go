@@ -21,6 +21,7 @@ package tree
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
@@ -86,6 +87,10 @@ type SelectClause struct {
 	Where       *Where
 	Distinct    bool
 	TableSelect bool
+}
+
+func init() {
+	fmt.Printf("// size of SelectClause is %d\n", unsafe.Sizeof(SelectClause{}))
 }
 
 // Format implements the NodeFormatter interface.

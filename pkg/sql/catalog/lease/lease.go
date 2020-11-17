@@ -21,6 +21,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
@@ -580,6 +581,10 @@ func ensureVersion(
 		return errors.Errorf("version %d for descriptor %s does not exist yet", minVersion, s.GetName())
 	}
 	return nil
+}
+
+func init() {
+	fmt.Printf("// size of descriptorState is %d\n", unsafe.Sizeof(descriptorState{}))
 }
 
 // findForTimestamp finds a descriptor valid for the timestamp.

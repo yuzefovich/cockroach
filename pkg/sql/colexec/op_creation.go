@@ -12,7 +12,9 @@ package colexec
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"unsafe"
 
 	"github.com/cockroachdb/cockroach/pkg/col/coldata"
 	"github.com/cockroachdb/cockroach/pkg/sql/colcontainer"
@@ -72,6 +74,10 @@ type NewColOperatorArgs struct {
 		// exceeds what is expected.
 		DelegateFDAcquisitions bool
 	}
+}
+
+func init() {
+	fmt.Printf("// size of NewColOperatorArgs is %d\n", unsafe.Sizeof(NewColOperatorArgs{}))
 }
 
 // NewColOperatorResult is a helper struct that encompasses all of the return

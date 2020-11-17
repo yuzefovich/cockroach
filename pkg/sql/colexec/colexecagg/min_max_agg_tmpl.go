@@ -20,6 +20,7 @@
 package colexecagg
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/cockroachdb/cockroach/pkg/col/coldata"
@@ -275,6 +276,17 @@ func (a *_AGG_TYPE_AGGKINDAggAlloc) newAggFunc() AggregateFunc {
 // {{end}}
 // {{end}}
 // {{end}}
+
+func init() {
+	// {{range .}}
+	// {{$agg := .Agg}}
+	// {{range .Overloads}}
+	// {{range .WidthOverloads}}
+	fmt.Printf("// size of _AGG_TYPE_AGGKINDAgg is %d\n", sizeOf_AGG_TYPE_AGGKINDAgg)
+	// {{end}}
+	// {{end}}
+	// {{end}}
+}
 
 // {{/*
 // _ACCUMULATE_MINMAX sets the output for the current group to be the value of

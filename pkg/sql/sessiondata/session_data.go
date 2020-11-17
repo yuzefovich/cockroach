@@ -15,6 +15,7 @@ import (
 	"net"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgnotice"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondatapb"
@@ -224,6 +225,10 @@ type LocalOnlySessionData struct {
 	// be propagated to the remote nodes. If so, that parameter should live  //
 	// in the SessionData struct above.                                      //
 	///////////////////////////////////////////////////////////////////////////
+}
+
+func init() {
+	fmt.Printf("// size of LocalOnlySessionData is %d\n", unsafe.Sizeof(LocalOnlySessionData{}))
 }
 
 // IsTemporarySchemaID returns true if the given ID refers to any of the temp

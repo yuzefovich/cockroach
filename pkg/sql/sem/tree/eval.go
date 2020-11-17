@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/cockroachdb/apd/v2"
 	"github.com/cockroachdb/cockroach/pkg/base"
@@ -1976,6 +1977,10 @@ type CmpOp struct {
 	Volatility Volatility
 
 	isPreferred bool
+}
+
+func init() {
+	fmt.Printf("// size of CmpOp is %d\n", unsafe.Sizeof(CmpOp{}))
 }
 
 func (op *CmpOp) params() TypeList {

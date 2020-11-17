@@ -12,8 +12,10 @@ package execinfra
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/cockroachdb/cockroach/pkg/kv"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
@@ -415,6 +417,10 @@ type RowChannel struct {
 	// numSenders is an atomic counter that keeps track of how many senders have
 	// yet to call ProducerDone().
 	numSenders int32
+}
+
+func init() {
+	fmt.Printf("// size of RowChannel is %d\n", unsafe.Sizeof(RowChannel{}))
 }
 
 var _ RowReceiver = &RowChannel{}

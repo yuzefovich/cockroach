@@ -21,6 +21,8 @@ package colexec
 
 import (
 	"context"
+	"fmt"
+	"unsafe"
 
 	"github.com/cockroachdb/apd/v2"
 	"github.com/cockroachdb/cockroach/pkg/col/coldata"
@@ -348,6 +350,14 @@ func (p partitioner_TYPE) partition(colVec coldata.Vec, outputCol []bool, n int)
 
 // {{end}}
 // {{end}}
+
+func init() {
+	// {{range .}}
+	// {{range .WidthOverloads}}
+	fmt.Printf("// size of distinct_TYPEOp is %d\n", unsafe.Sizeof(distinct_TYPEOp{}))
+	// {{end}}
+	// {{end}}
+}
 
 // checkDistinct retrieves the value at the ith index of col, compares it
 // to the passed in lastVal, and sets the ith value of outputCol to true if the

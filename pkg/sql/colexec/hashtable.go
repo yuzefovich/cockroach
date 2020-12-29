@@ -319,7 +319,7 @@ func (p *hashTableProbeBuffer) accountForLimitedSlices(allocator *colmem.Allocat
 // buildFromBufferedTuples builds the hash table from already buffered tuples
 // in ht.vals. It'll determine the appropriate number of buckets that satisfy
 // the target load factor.
-func (ht *hashTable) buildFromBufferedTuples(ctx context.Context) {
+func (ht *hashTable) buildFromBufferedTuples(ctx context.Context, storeHashCodes bool) {
 	for ht.shouldResize(ht.vals.Length()) {
 		ht.numBuckets *= 2
 	}
@@ -333,6 +333,9 @@ func (ht *hashTable) buildFromBufferedTuples(ctx context.Context) {
 	// ht.buildScratch.next is used to store the computed hash value of each key.
 	ht.buildScratch.next = maybeAllocateUint64Array(ht.buildScratch.next, ht.vals.Length()+1)
 	ht.computeBuckets(ctx, ht.buildScratch.next[1:], ht.keys, ht.vals.Length(), nil /* sel */)
+	if storeHashCodes {
+		ht.probeScratch.hashBuffer = append(ht.probeScratch.hashBuffer[:0], ht.buildScratch.next[1:]...)
+	}
 	ht.buildNextChains(ctx, ht.buildScratch.first, ht.buildScratch.next, 1, uint64(ht.vals.Length()))
 	// Account for memory used by the internal auxiliary slices that are
 	// limited in size.
@@ -346,7 +349,9 @@ func (ht *hashTable) buildFromBufferedTuples(ctx context.Context) {
 // fullBuild executes the entirety of the hash table build phase using the input
 // as the build source. The input is entirely consumed in the process. Note that
 // the hash table is assumed to operate in hashTableFullBuildMode.
-func (ht *hashTable) fullBuild(ctx context.Context, input colexecbase.Operator) {
+func (ht *hashTable) fullBuild(
+	ctx context.Context, input colexecbase.Operator, storeHashCodes bool,
+) {
 	if ht.buildMode != hashTableFullBuildMode {
 		colexecerror.InternalError(errors.AssertionFailedf(
 			"hashTable.fullBuild is called in unexpected build mode %d", ht.buildMode,
@@ -366,7 +371,7 @@ func (ht *hashTable) fullBuild(ctx context.Context, input colexecbase.Operator) 
 			ht.vals.append(batch, 0 /* startIdx */, batch.Length())
 		})
 	}
-	ht.buildFromBufferedTuples(ctx)
+	ht.buildFromBufferedTuples(ctx, storeHashCodes)
 }
 
 // distinctBuild appends all distinct tuples from batch to the hash table. Note
@@ -450,7 +455,14 @@ func (ht *hashTable) findBuckets(
 		//gcassert:bce
 		groupIDs[i] = f
 	}
-	copy(ht.probeScratch.toCheck, hashTableInitialToCheck[:batchLength])
+	// TODO
+	if len(hashTableInitialToCheck) >= batchLength {
+		copy(ht.probeScratch.toCheck, hashTableInitialToCheck[:batchLength])
+	} else {
+		for i := range ht.probeScratch.toCheck {
+			ht.probeScratch.toCheck[i] = uint64(i)
+		}
+	}
 
 	for nToCheck := uint64(batchLength); nToCheck > 0; {
 		// Continue searching for the build table matching keys while the toCheck
@@ -485,7 +497,7 @@ func (ht *hashTable) appendAllDistinct(ctx context.Context, batch coldata.Batch)
 	ht.buildScratch.next = append(ht.buildScratch.next, ht.probeScratch.hashBuffer[:batch.Length()]...)
 	ht.buildNextChains(ctx, ht.buildScratch.first, ht.buildScratch.next, numBuffered+1, uint64(batch.Length()))
 	if ht.shouldResize(ht.vals.Length()) {
-		ht.buildFromBufferedTuples(ctx)
+		ht.buildFromBufferedTuples(ctx, false)
 	}
 }
 

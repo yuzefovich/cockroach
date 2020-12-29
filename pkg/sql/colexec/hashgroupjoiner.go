@@ -117,6 +117,39 @@ const (
 	hgjDone
 )
 
+func TryHashGroupJoiner(args *colexecagg.NewAggregatorArgs) (colexecbase.Operator, error) {
+	var hgj colexecbase.Operator
+	if err := colexecerror.CatchVectorizedRuntimeError(func() {
+		input := args.Input
+		sp, isSimpleProjection := input.(*simpleProjectOp)
+		var joinOutputProjection []uint32
+		if isSimpleProjection {
+			joinOutputProjection = sp.projection
+			input = sp.input
+		}
+		dp, isDiskSpiller := input.(*diskSpillerBase)
+		if !isDiskSpiller {
+			colexecerror.InternalError(errors.New("not a disk spiller"))
+		}
+		hj, isHashJoiner := dp.inMemoryOp.(*hashJoiner)
+		if !isHashJoiner {
+			colexecerror.InternalError(errors.New("not a hash joiner"))
+		}
+		args.Allocator = hj.outputUnlimitedAllocator
+		hgj = newHashGroupJoiner(
+			hj.outputUnlimitedAllocator,
+			hj.spec,
+			hj.inputOne,
+			hj.inputTwo,
+			joinOutputProjection,
+			args,
+		)
+	}); err != nil {
+		return nil, err
+	}
+	return hgj, nil
+}
+
 // joinOutputProjection specifies a simple projection on top of the hash join
 // output, it can be nil if all columns from the hash join are output.
 func newHashGroupJoiner(

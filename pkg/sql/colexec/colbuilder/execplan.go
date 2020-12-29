@@ -276,6 +276,7 @@ var (
 	errSampleAggregatorWrap           = errors.New("core.SampleAggregator is not supported (not an execinfra.RowSource)")
 	errBackupDataWrap                 = errors.New("core.BackupData is not supported (not an execinfra.RowSource)")
 	errSplitAndScatterWrap            = errors.New("core.SplitAndScatter is not supported (not an execinfra.RowSource)")
+	errHashGroupJoiner                = errors.New("core.HashGroupJoiner is not supported")
 	errExperimentalWrappingProhibited = errors.New("wrapping for non-JoinReader and non-LocalPlanNode cores is prohibited in vectorize=experimental_always")
 )
 
@@ -335,6 +336,8 @@ func canWrap(mode sessiondatapb.VectorizeExecMode, spec *execinfrapb.ProcessorSp
 	case spec.Core.SplitAndScatter != nil:
 		return errSplitAndScatterWrap
 	case spec.Core.RestoreData != nil:
+	case spec.Core.HashGroupJoiner != nil:
+		return errHashGroupJoiner
 	default:
 		return errors.AssertionFailedf("unexpected processor core %q", spec.Core)
 	}

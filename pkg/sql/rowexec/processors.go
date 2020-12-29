@@ -359,6 +359,9 @@ func NewProcessor(
 		}
 		return newInvertedFilterer(flowCtx, processorID, core.InvertedFilterer, inputs[0], post, outputs[0])
 	}
+	if core.HashGroupJoiner != nil {
+		return nil, errors.AssertionFailedf("HashGroupJoiner core is not supported in the row engine")
+	}
 	return nil, errors.Errorf("unsupported processor core %q", core)
 }
 

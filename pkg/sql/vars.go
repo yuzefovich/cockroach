@@ -1219,6 +1219,25 @@ var varGen = map[string]sessionVar{
 			return formatBoolAsPostgresSetting(experimentalUniqueWithoutIndexConstraintsMode.Get(sv))
 		},
 	},
+
+	// CockroachDB extension.
+	`experimental_enable_hash_group_joins`: {
+		GetStringVal: makePostgresBoolGetStringValFn(`experimental_enable_hash_group_joins`),
+		Set: func(_ context.Context, m *sessionDataMutator, s string) error {
+			b, err := paramparse.ParseBoolVar(`experimental_enable_hash_group_joins`, s)
+			if err != nil {
+				return err
+			}
+			m.SetExperimentalHashGroupJoinEnabled(b)
+			return nil
+		},
+		Get: func(evalCtx *extendedEvalContext) string {
+			return formatBoolAsPostgresSetting(evalCtx.SessionData.ExperimentalHashGroupJoinEnabled)
+		},
+		GlobalDefault: func(sv *settings.Values) string {
+			return "false"
+		},
+	},
 }
 
 const compatErrMsg = "this parameter is currently recognized only for compatibility and has no effect in CockroachDB."

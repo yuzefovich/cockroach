@@ -2231,6 +2231,10 @@ func (m *sessionDataMutator) SetUniqueWithoutIndexConstraints(val bool) {
 	m.data.EnableUniqueWithoutIndexConstraints = val
 }
 
+func (m *sessionDataMutator) SetExperimentalHashGroupJoinEnabled(val bool) {
+	m.data.ExperimentalHashGroupJoinEnabled = val
+}
+
 // RecordLatestSequenceValue records that value to which the session incremented
 // a sequence.
 func (m *sessionDataMutator) RecordLatestSequenceVal(seqID uint32, val int64) {

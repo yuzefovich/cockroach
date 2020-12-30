@@ -238,6 +238,13 @@ type LocalOnlySessionData struct {
 	// TODO(rytaft): remove this once unique without index constraints are fully
 	// supported.
 	EnableUniqueWithoutIndexConstraints bool
+
+	// ExperimentalHashGroupJoinEnabled indicates whether the physical planner
+	// will attempt to convert a hash join followed by a hash aggregator into a
+	// single hash group-join operation. The operation is only supported in the
+	// vectorized engine, so if the conversion is successful, but the old
+	// row-by-row engine is used, the query will fail.
+	ExperimentalHashGroupJoinEnabled bool
 	///////////////////////////////////////////////////////////////////////////
 	// WARNING: consider whether a session parameter you're adding needs to  //
 	// be propagated to the remote nodes. If so, that parameter should live  //

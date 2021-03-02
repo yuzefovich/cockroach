@@ -17,8 +17,10 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql"
+	"github.com/cockroachdb/cockroach/pkg/sql/execinfra"
 	"github.com/cockroachdb/cockroach/pkg/sql/execinfrapb"
 	"github.com/cockroachdb/cockroach/pkg/sql/physicalplan"
+	"github.com/cockroachdb/cockroach/pkg/sql/rowenc"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
@@ -133,6 +135,14 @@ func distStreamIngest(
 		execCfg.ContentionRegistry,
 	)
 	defer recv.Release()
+	recv.SetPushCallback(func(row rowenc.EncDatumRow, meta *execinfrapb.ProducerMetadata, status execinfra.ConsumerStatus) execinfra.ConsumerStatus {
+		// Do some work to check whether we should drain the whole flow.
+		var someConditionToShutdown bool
+		if someConditionToShutdown && status == execinfra.NeedMoreRows {
+			return execinfra.DrainRequested
+		}
+		return status
+	})
 
 	// Copy the evalCtx, as dsp.Run() might change it.
 	evalCtxCopy := *evalCtx

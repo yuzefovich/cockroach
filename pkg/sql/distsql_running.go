@@ -432,6 +432,12 @@ type DistSQLReceiver struct {
 	alloc  rowenc.DatumAlloc
 	closed bool
 
+	// pushCallback, when non-nil, will be called by Push() with the same input
+	// arguments as well as the ConsumerStatus returned by the bode of Push().
+	// The callback is allowed to overwrite the consumer status (for example, to
+	// request draining).
+	pushCallback func(rowenc.EncDatumRow, *execinfrapb.ProducerMetadata, execinfra.ConsumerStatus) execinfra.ConsumerStatus
+
 	rangeCache *rangecache.RangeCache
 	tracing    *SessionTracing
 	cleanup    func()
@@ -589,6 +595,7 @@ func (r *DistSQLReceiver) clone() *DistSQLReceiver {
 		stmtType:           tree.Rows,
 		tracing:            r.tracing,
 		contentionRegistry: r.contentionRegistry,
+		pushCallback:       r.pushCallback,
 	}
 	return ret
 }
@@ -600,10 +607,27 @@ func (r *DistSQLReceiver) SetError(err error) {
 	r.resultWriter.SetError(err)
 }
 
+// SetPushCallback sets a callback that will be called by the DistSQLReceiver
+// as the very last action on every Push.
+func (r *DistSQLReceiver) SetPushCallback(
+	pushCallback func(rowenc.EncDatumRow, *execinfrapb.ProducerMetadata, execinfra.ConsumerStatus) execinfra.ConsumerStatus,
+) {
+	r.pushCallback = pushCallback
+}
+
 // Push is part of the RowReceiver interface.
 func (r *DistSQLReceiver) Push(
 	row rowenc.EncDatumRow, meta *execinfrapb.ProducerMetadata,
-) execinfra.ConsumerStatus {
+) (returnStatus execinfra.ConsumerStatus) {
+	if r.pushCallback != nil {
+		defer func() {
+			newStatus := r.pushCallback(row, meta, r.status)
+			if r.status != newStatus && r.status != execinfra.ConsumerClosed {
+				r.status = newStatus
+				returnStatus = newStatus
+			}
+		}()
+	}
 	if meta != nil {
 		if metaWriter, ok := r.resultWriter.(MetadataResultWriter); ok {
 			metaWriter.AddMeta(r.ctx, meta)

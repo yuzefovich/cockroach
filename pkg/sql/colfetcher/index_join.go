@@ -17,6 +17,7 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/col/coldata"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
+	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/colexec/colexecspan"
 	"github.com/cockroachdb/cockroach/pkg/sql/colexecerror"
@@ -305,7 +306,8 @@ func NewColIndexJoin(
 	}
 
 	// Allow 1/16 of the operator's working memory for the span key bytes.
-	batchSizeLimit := int(float64(execinfra.GetWorkMemLimit(flowCtx)) * defaultBatchSizeLimitRatio)
+	ratio := defaultBatchSizeLimitRatio.Get(&flowCtx.Cfg.Settings.SV)
+	batchSizeLimit := int(float64(execinfra.GetWorkMemLimit(flowCtx)) * ratio)
 	spanAssembler := colexecspan.NewColSpanAssembler(
 		flowCtx.Codec(), allocator, table, index, inputTypes, neededColumns, batchSizeLimit)
 
@@ -322,7 +324,11 @@ func NewColIndexJoin(
 
 // defaultBatchSizeLimitRatio is the fraction of the operator working memory
 // limit that is devoted to the underlying bytes for the span keys.
-var defaultBatchSizeLimitRatio = 1.0 / 16.0
+var defaultBatchSizeLimitRatio = settings.RegisterFloatSetting(
+	"sql.defaults.col_index_join_ratio",
+	"temporary",
+	0.625,
+)
 
 // Release implements the execinfra.Releasable interface.
 func (s *ColIndexJoin) Release() {

@@ -607,8 +607,6 @@ func registerTPCHVec(r registry.Registry) {
 		Name:    "tpchvec/bench",
 		Owner:   registry.OwnerSQLQueries,
 		Cluster: r.MakeClusterSpec(tpchVecNodeCount),
-		Skip: "This config can be used to perform some benchmarking and is not " +
-			"meant to be run on a nightly basis",
 		Run: func(ctx context.Context, t test.Test, c cluster.Cluster) {
 			// In order to use this test for benchmarking, include the queries
 			// that modify the cluster settings for all configs to benchmark
@@ -618,15 +616,15 @@ func registerTPCHVec(r registry.Registry) {
 			// but it still serves the purpose of showing how to use the config.
 			var clusterSetups [][]string
 			var setupNames []string
-			for _, batchSize := range []int{512, 1024, 1536} {
+			for _, ratio := range []float64{0.025, 0.0625, 0.1} {
 				clusterSetups = append(clusterSetups, []string{
-					fmt.Sprintf("SET CLUSTER SETTING sql.testing.vectorize.batch_size=%d", batchSize),
+					fmt.Sprintf("SET CLUSTER SETTING sql.defaults.col_index_join_ratio=%.4f", ratio),
 				})
-				setupNames = append(setupNames, fmt.Sprintf("%d", batchSize))
+				setupNames = append(setupNames, fmt.Sprintf("%.4f", ratio))
 			}
 			benchTest := newTpchVecBenchTest(
-				5,   /* numRunsPerQuery */
-				nil, /* queriesToRun */
+				5,                                  /* numRunsPerQuery */
+				[]int{4, 5, 6, 10, 12, 14, 15, 20}, /* queriesToRun */
 				clusterSetups,
 				setupNames,
 			)
